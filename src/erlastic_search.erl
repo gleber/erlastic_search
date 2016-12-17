@@ -366,7 +366,7 @@ search(Params, Index, Type, Query, Opts) ->
 -spec multi_search(#erls_params{}, list({HeaderInformation :: headers(), SearchRequest :: erlastic_json() | binary()})) -> {ok, ResultJson :: erlastic_success_result()} | {error, Reason :: any()}.
 multi_search(Params, HeaderJsonTuples) ->
     Body = lists:map(fun({HeaderInformation, SearchRequest}) ->
-        [ jsx:encode(HeaderInformation), <<"\n">>, maybe_encode_doc(SearchRequest), <<"\n">> ]
+        [ jiffy:encode(HeaderInformation), <<"\n">>, maybe_encode_doc(SearchRequest), <<"\n">> ]
     end, HeaderJsonTuples),
     erls_resource:get(Params, <<"/_msearch">>, [], [], iolist_to_binary(Body), Params#erls_params.http_client_options).
 
@@ -504,21 +504,19 @@ commas([]) ->
 commas([H | T]) ->
     << H/binary, << <<",", B/binary>> || B <- T >>/binary >>.
 
--spec bulk_index_docs_header(binary(), binary(), binary(), list()) -> binary().
+-spec bulk_index_docs_header(binary(), binary(), binary(), map()) -> binary().
 bulk_index_docs_header(Index, Type, Id, HeaderInformation) ->
-    IndexHeaderJson1 = [
-        {<<"_index">>, Index}
-        ,{<<"_type">>, Type}
-        | HeaderInformation
-    ],
+    IndexHeaderJson1 = maps:merge(#{ <<"_index">> => Index
+                                   , <<"_type">> => Type},
+                                  HeaderInformation),
 
     IndexHeaderJson2 = case Id =:= undefined of
         true ->  IndexHeaderJson1;
-        false -> [ {<<"_id">>, Id} | IndexHeaderJson1]
+        false -> maps:put(<<"_id">>, Id, IndexHeaderJson1)
     end,
 
     %% we cannot use erls_json to generate this, see the doc string for `erls_json:encode/1'
-    jsx:encode([{<<"index">>, IndexHeaderJson2}]).
+    jiffy:encode(#{<<"index">> => IndexHeaderJson2}).
 
 -spec maybe_encode_doc(binary() | erlastic_json()) -> binary().
 maybe_encode_doc(Bin) when is_binary(Bin) -> Bin;
